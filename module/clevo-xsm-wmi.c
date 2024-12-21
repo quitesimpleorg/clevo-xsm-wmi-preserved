@@ -126,7 +126,7 @@ static enum kb_color param_kb_color[] = { [0 ... 3] = KB_COLOR_DEFAULT };
 static int param_kb_color_num;
 #define param_check_kb_color(name, p) __param_check(name, p, enum kb_color)
 module_param_array_named(kb_color, param_kb_color, kb_color,
-						 &param_kb_color_num, S_IRUSR);
+						 &param_kb_color_num, 0400);
 MODULE_PARM_DESC(kb_color, "Set the color(s) of the keyboard (sections)");
 
 
@@ -150,16 +150,16 @@ static const struct kernel_param_ops param_ops_kb_brightness = {
 
 static unsigned char param_kb_brightness = KB_BRIGHTNESS_DEFAULT;
 #define param_check_kb_brightness param_check_byte
-module_param_named(kb_brightness, param_kb_brightness, kb_brightness, S_IRUSR);
+module_param_named(kb_brightness, param_kb_brightness, kb_brightness, 0400);
 MODULE_PARM_DESC(kb_brightness, "Set the brightness of the keyboard backlight");
 
 
 static bool param_kb_off;
-module_param_named(kb_off, param_kb_off, bool, S_IRUSR);
+module_param_named(kb_off, param_kb_off, bool, 0400);
 MODULE_PARM_DESC(kb_off, "Switch keyboard backlight off");
 
 static bool param_kb_cycle_colors = true;
-module_param_named(kb_cycle_colors, param_kb_cycle_colors, bool, S_IRUSR);
+module_param_named(kb_cycle_colors, param_kb_cycle_colors, bool, 0400);
 MODULE_PARM_DESC(kb_cycle_colors, "Cycle colors rather than modes");
 
 
@@ -189,7 +189,7 @@ static const struct kernel_param_ops param_ops_poll_freq = {
 
 static unsigned char param_poll_freq = POLL_FREQ_DEFAULT;
 #define param_check_poll_freq param_check_byte
-module_param_named(poll_freq, param_poll_freq, poll_freq, S_IRUSR);
+module_param_named(poll_freq, param_poll_freq, poll_freq, 0400);
 MODULE_PARM_DESC(poll_freq, "Set polling frequency");
 
 
@@ -470,13 +470,13 @@ static struct {
 	} state;
 
 	struct {
-		unsigned left;
-		unsigned center;
-		unsigned right;
-		unsigned extra;
+		unsigned int left;
+		unsigned int center;
+		unsigned int right;
+		unsigned int extra;
 	} color;
 
-	unsigned brightness;
+	unsigned int brightness;
 
 	enum kb_mode {
 		KB_MODE_RANDOM_COLOR,
@@ -491,9 +491,9 @@ static struct {
 
 	struct kb_backlight_ops {
 		void (*set_state)(enum kb_state state);
-		void (*set_color)(unsigned left, unsigned center,
-			unsigned right, unsigned extra);
-		void (*set_brightness)(unsigned brightness);
+		void (*set_color)(unsigned int left, unsigned int center,
+			unsigned int right, unsigned int extra);
+		void (*set_brightness)(unsigned int brightness);
 		void (*set_mode)(enum kb_mode);
 		void (*init)(void);
 	} *ops;
@@ -588,8 +588,8 @@ static void kb_next_color(void)
 
 /* full color backlight keyboard */
 
-static void kb_full_color__set_color(unsigned left, unsigned center,
-	unsigned right, unsigned extra)
+static void kb_full_color__set_color(unsigned int left, unsigned int center,
+	unsigned int right, unsigned int extra)
 {
 	u32 cmd;
 
@@ -623,15 +623,16 @@ static void kb_full_color__set_color(unsigned left, unsigned center,
 		cmd |= kb_colors[extra].value.r << 8;
 		cmd |= kb_colors[extra].value.g << 0;
 
-		if(!clevo_xsm_wmi_evaluate_wmbb_method(SET_KB_LED, cmd, NULL))
+		if (!clevo_xsm_wmi_evaluate_wmbb_method(SET_KB_LED, cmd, NULL))
 			kb_backlight.color.extra = extra;
 	}
 
 	kb_backlight.mode = KB_MODE_CUSTOM;
 }
 
-static void kb_full_color__precompute_brightness_levels(unsigned steps, u8 *lvl_arr) {
-	static bool precomputed = false;
+static void kb_full_color__precompute_brightness_levels(unsigned steps, u8 *lvl_arr) 
+{
+	static bool precomputed;
 
 	/*
 	 * We need to emulate floating point calculations,
@@ -668,7 +669,7 @@ static void kb_full_color__precompute_brightness_levels(unsigned steps, u8 *lvl_
 		}
 
 		/* Just as a safety net. */
-		cur = clamp_t(unsigned, cur, 0, 255);
+		cur = clamp_t(unsigned int, cur, 0, 255);
 
 		lvl_arr[i] = cur;
 
@@ -685,20 +686,20 @@ static void kb_full_color__precompute_brightness_levels(unsigned steps, u8 *lvl_
 	precomputed = true;
 }
 
-static void kb_full_color__set_brightness(unsigned i)
+static void kb_full_color__set_brightness(unsigned int i)
 {
 	static u8 lvl_to_raw[KB_BRIGHTNESS_MAX];
 
 	kb_full_color__precompute_brightness_levels(KB_BRIGHTNESS_MAX, lvl_to_raw);
 
-	i = clamp_t(unsigned, i, 0, ARRAY_SIZE(lvl_to_raw) - 1);
+	i = clamp_t(unsigned int, i, 0, ARRAY_SIZE(lvl_to_raw) - 1);
 
 	if (!clevo_xsm_wmi_evaluate_wmbb_method(SET_KB_LED,
 		0xF4000000 | lvl_to_raw[i], NULL))
 		kb_backlight.brightness = i;
 }
 
-static void kb_full_color__set_mode(unsigned mode)
+static void kb_full_color__set_mode(unsigned int mode)
 {
 	static u32 cmds[] = {
 		[KB_MODE_BREATHE]      = 0x1002a000,
@@ -791,8 +792,8 @@ static struct kb_backlight_ops kb_full_color_with_extra_ops = {
 
 /* 8 color backlight keyboard */
 
-static void kb_8_color__set_color(unsigned left, unsigned center,
-	unsigned right, unsigned extra)
+static void kb_8_color__set_color(unsigned int left, unsigned int center,
+	unsigned int right, unsigned int extra)
 {
 	u32 cmd = 0x02010000;
 
@@ -810,11 +811,11 @@ static void kb_8_color__set_color(unsigned left, unsigned center,
 	kb_backlight.mode = KB_MODE_CUSTOM;
 }
 
-static void kb_8_color__set_brightness(unsigned i)
+static void kb_8_color__set_brightness(unsigned int i)
 {
 	u32 cmd = 0xD2010000;
 
-	i = clamp_t(unsigned, i, 0, KB_BRIGHTNESS_MAX);
+	i = clamp_t(unsigned int, i, 0, KB_BRIGHTNESS_MAX);
 
 	cmd |= i << 12;
 	cmd |= kb_backlight.color.right  << 8;
@@ -825,7 +826,7 @@ static void kb_8_color__set_brightness(unsigned i)
 		kb_backlight.brightness = i;
 }
 
-static void kb_8_color__set_mode(unsigned mode)
+static void kb_8_color__set_mode(unsigned int mode)
 {
 	static u32 cmds[] = {
 		[KB_MODE_BREATHE]      = 0x12010000,
@@ -1128,7 +1129,7 @@ static ssize_t clevo_xsm_state_store(struct device *child,
 	if (ret)
 		return ret;
 
-	val = clamp_t(unsigned, val, 0, 1);
+	val = clamp_t(unsigned int, val, 0, 1);
 	kb_backlight.ops->set_state(val);
 
 	return ret ? : size;
@@ -1167,7 +1168,7 @@ static ssize_t clevo_xsm_mode_store(struct device *child,
 	if (ret)
 		return ret;
 
-	val = clamp_t(unsigned, val, 0, 7);
+	val = clamp_t(unsigned int, val, 0, 7);
 	kb_backlight.ops->set_mode(modes[val]);
 
 	return ret ? : size;
@@ -1212,7 +1213,7 @@ static ssize_t clevo_xsm_color_store(struct device *child,
 			if (!strcmp(left, kb_colors[j].name))
 				val[0] = j;
 		}
-		val[0] = clamp_t(unsigned, val[0], 0, ARRAY_SIZE(kb_colors));
+		val[0] = clamp_t(unsigned int, val[0], 0, ARRAY_SIZE(kb_colors));
 		val[3] = val[2] = val[1] = val[0];
 
 	} else if (i == 3 || i == 4) {
@@ -1226,10 +1227,10 @@ static ssize_t clevo_xsm_color_store(struct device *child,
 			if (!strcmp(extra, kb_colors[j].name))
 				val[3] = j;
 		}
-		val[0] = clamp_t(unsigned, val[0], 0, ARRAY_SIZE(kb_colors));
-		val[1] = clamp_t(unsigned, val[1], 0, ARRAY_SIZE(kb_colors));
-		val[2] = clamp_t(unsigned, val[2], 0, ARRAY_SIZE(kb_colors));
-		val[3] = clamp_t(unsigned, val[3], 0, ARRAY_SIZE(kb_colors));
+		val[0] = clamp_t(unsigned int, val[0], 0, ARRAY_SIZE(kb_colors));
+		val[1] = clamp_t(unsigned int, val[1], 0, ARRAY_SIZE(kb_colors));
+		val[2] = clamp_t(unsigned int, val[2], 0, ARRAY_SIZE(kb_colors));
+		val[3] = clamp_t(unsigned int, val[3], 0, ARRAY_SIZE(kb_colors));
 
 	} else
 		return -EINVAL;
@@ -1246,13 +1247,14 @@ struct clevo_hwmon {
 	struct device *dev;
 };
 
-static struct clevo_hwmon *clevo_hwmon = NULL;
+static struct clevo_hwmon *clevo_hwmon;
 
 static int
 clevo_read_fan(int idx)
 {
 	u8 value;
 	int raw_rpm;
+
 	ec_read(0xd0 + 0x2 * idx, &value);
 	raw_rpm = value << 8;
 	ec_read(0xd1 + 0x2 * idx, &value);
@@ -1304,6 +1306,7 @@ clevo_hwmon_show_temp1_input(struct device *dev, struct device_attribute *attr,
 				 char *buf)
 {
 	u8 value;
+
 	ec_read(0x07, &value);
 	return sprintf(buf, "%i\n", value * 1000);
 }
@@ -1321,6 +1324,7 @@ clevo_hwmon_show_temp2_input(struct device *dev, struct device_attribute *attr,
 				 char *buf)
 {
 	u8 value;
+
 	ec_read(0xcd, &value);
 	return sprintf(buf, "%i\n", value * 1000);
 }
@@ -1333,18 +1337,18 @@ clevo_hwmon_show_temp2_label(struct device *dev, struct device_attribute *attr,
 }
 #endif
 
-static SENSOR_DEVICE_ATTR(name, S_IRUGO, clevo_hwmon_show_name, NULL, 0);
-static SENSOR_DEVICE_ATTR(fan1_input, S_IRUGO, clevo_hwmon_show_fan1_input, NULL, 0);
-static SENSOR_DEVICE_ATTR(fan1_label, S_IRUGO, clevo_hwmon_show_fan1_label, NULL, 0);
+static SENSOR_DEVICE_ATTR(name, 0444, clevo_hwmon_show_name, NULL, 0);
+static SENSOR_DEVICE_ATTR(fan1_input, 0444, clevo_hwmon_show_fan1_input, NULL, 0);
+static SENSOR_DEVICE_ATTR(fan1_label, 0444, clevo_hwmon_show_fan1_label, NULL, 0);
 #ifdef EXPERIMENTAL
-static SENSOR_DEVICE_ATTR(fan2_input, S_IRUGO, clevo_hwmon_show_fan2_input, NULL, 0);
-static SENSOR_DEVICE_ATTR(fan2_label, S_IRUGO, clevo_hwmon_show_fan2_label, NULL, 0);
+static SENSOR_DEVICE_ATTR(fan2_input, 0444, clevo_hwmon_show_fan2_input, NULL, 0);
+static SENSOR_DEVICE_ATTR(fan2_label, 0444, clevo_hwmon_show_fan2_label, NULL, 0);
 #endif
-static SENSOR_DEVICE_ATTR(temp1_input, S_IRUGO, clevo_hwmon_show_temp1_input, NULL, 0);
-static SENSOR_DEVICE_ATTR(temp1_label, S_IRUGO, clevo_hwmon_show_temp1_label, NULL, 0);
+static SENSOR_DEVICE_ATTR(temp1_input, 0444, clevo_hwmon_show_temp1_input, NULL, 0);
+static SENSOR_DEVICE_ATTR(temp1_label, 0444, clevo_hwmon_show_temp1_label, NULL, 0);
 #ifdef EXPERIMENTAL
-static SENSOR_DEVICE_ATTR(temp2_input, S_IRUGO, clevo_hwmon_show_temp2_input, NULL, 0);
-static SENSOR_DEVICE_ATTR(temp2_label, S_IRUGO, clevo_hwmon_show_temp2_label, NULL, 0);
+static SENSOR_DEVICE_ATTR(temp2_input, 0444, clevo_hwmon_show_temp2_input, NULL, 0);
+static SENSOR_DEVICE_ATTR(temp2_label, 0444, clevo_hwmon_show_temp2_label, NULL, 0);
 #endif
 
 static struct attribute *hwmon_default_attributes[] = {
@@ -1533,13 +1537,13 @@ static struct dmi_system_id clevo_xsm_dmi_table[] __initdata = {
 		.driver_data = &kb_full_color_ops,
 	},
 	{
-                .ident = "Clevo P95_HP",
-                .matches = {
-                        DMI_MATCH(DMI_PRODUCT_NAME, "P95_HP"),
-                },
-                .callback = clevo_xsm_dmi_matched,
-                .driver_data = &kb_full_color_ops,
-        },
+		.ident = "Clevo P95_HP",
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_NAME, "P95_HP"),
+		},
+		.callback = clevo_xsm_dmi_matched,
+		.driver_data = &kb_full_color_ops,
+	},
 	{
 		.ident = "Clevo N850HJ",
 		.matches = {
@@ -1583,7 +1587,7 @@ static struct dmi_system_id clevo_xsm_dmi_table[] __initdata = {
 	{
     .ident = "Clevo P65_67HSHP",
     .matches = {
-        DMI_MATCH(DMI_PRODUCT_NAME, "P65_67HSHP"),
+	DMI_MATCH(DMI_PRODUCT_NAME, "P65_67HSHP"),
     },
     .callback = clevo_xsm_dmi_matched,
     .driver_data = &kb_full_color_ops,
@@ -1631,12 +1635,12 @@ static struct dmi_system_id clevo_xsm_dmi_table[] __initdata = {
 		.driver_data = &kb_full_color_ops,
 	},
 	{
-        .ident = "Clevo P7xxDM3(-G)",
-        .matches = {
-            DMI_MATCH(DMI_PRODUCT_NAME, "P7xxDM3(-G)"),
-        },
-        .callback = clevo_xsm_dmi_matched,
-        .driver_data = &kb_full_color_ops,
+	.ident = "Clevo P7xxDM3(-G)",
+	.matches = {
+	    DMI_MATCH(DMI_PRODUCT_NAME, "P7xxDM3(-G)"),
+	},
+	.callback = clevo_xsm_dmi_matched,
+	.driver_data = &kb_full_color_ops,
     },
 	{
 		/* terminating NULL entry */
