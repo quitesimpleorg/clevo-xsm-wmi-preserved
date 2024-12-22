@@ -1,6 +1,6 @@
 /*
  * clevo-xsm-wmi.c
- *
+ * Copyright (C) 2024 Albert Schwarzopf <dev at quitesimple org>
  * Copyright (C) 2014-2016 Arnoud Willemsen <mail@lynthium.com>
  *
  * Based on tuxedo-wmi by TUXEDO Computers GmbH
@@ -1701,7 +1701,7 @@ static int clevo_xsm_wmi_probe(struct wmi_device *wdev, const void *dummy_contex
 	return ret;
 }
 
-
+/* Taken from tuxedo-drivers */
 static const struct wmi_device_id clevo_wmi_device_ids[] = {
 	// Listing one should be enough, for a driver that "takes care of all anyways"
 	// also prevents probe (and handling) per "device"
@@ -1725,7 +1725,7 @@ module_wmi_driver(clevo_xsm_wmi_driver);
 //module_init(clevo_xsm_init);
 //module_exit(clevo_xsm_exit);
 
+MODULE_AUTHOR("Albert Schwarzkopf <dev at quitesimple.org>");
 MODULE_AUTHOR("TUXEDO Computer GmbH <tux@tuxedocomputers.com>");
 MODULE_DESCRIPTION("Clevo SM series laptop driver.");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("0.1.1");
