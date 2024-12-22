@@ -351,7 +351,7 @@ static int clevo_xsm_input_open(struct input_dev *dev)
 		clevo_xsm_input_polling_thread,
 		NULL, "clevo_xsm-polld");
 
-	if (unlikely(IS_ERR(clevo_xsm_input_polling_task))) {
+	if (IS_ERR(clevo_xsm_input_polling_task)) {
 		clevo_xsm_input_polling_task = NULL;
 		CLEVO_XSM_ERROR("Could not create polling thread\n");
 				return PTR_ERR(clevo_xsm_input_polling_task);
@@ -362,7 +362,7 @@ static int clevo_xsm_input_open(struct input_dev *dev)
 
 static void clevo_xsm_input_close(struct input_dev *dev)
 {
-	if (unlikely(IS_ERR_OR_NULL(clevo_xsm_input_polling_task)))
+	if (IS_ERR_OR_NULL(clevo_xsm_input_polling_task))
 		return;
 
 	kthread_stop(clevo_xsm_input_polling_task);
@@ -432,25 +432,24 @@ static int clevo_xsm_wmi_evaluate_wmbb_method(u32 method_id, u32 arg,
 	status = wmi_evaluate_method(CLEVO_GET_GUID, 0x00,
 		method_id, &in, &out);
 
-	if (unlikely(ACPI_FAILURE(status)))
-		goto exit;
+	if (unlikely(ACPI_FAILURE(status))) {
+		CLEVO_XSM_ERROR("failed to evaluate wmi method\n");
+		return -EIO;
+	}
 
 	obj = (union acpi_object *) out.pointer;
-	if (obj && obj->type == ACPI_TYPE_INTEGER)
-			tmp = (u32) obj->integer.value;
-	else
-			tmp = 0;
-
+	if (obj && obj->type == ACPI_TYPE_INTEGER) {
+		tmp = (u32) obj->integer.value;
+	} else {
+		tmp = 0;
+		CLEVO_XSM_ERROR("return type not integer\n");
+	}
 	CLEVO_XSM_DEBUG("%0#4x  OUT: %0#6x (IN: %0#6x)\n", method_id, tmp, arg);
 
 	if (likely(retval))
-			*retval = tmp;
+		*retval = tmp;
 
 	kfree(obj);
-
-exit:
-	if (unlikely(ACPI_FAILURE(status)))
-		return -EIO;
 
 	return 0;
 }
@@ -628,7 +627,7 @@ static void kb_full_color__set_color(unsigned int left, unsigned int center,
 	kb_backlight.mode = KB_MODE_CUSTOM;
 }
 
-static void kb_full_color__precompute_brightness_levels(unsigned steps, u8 *lvl_arr) 
+static void kb_full_color__precompute_brightness_levels(unsigned steps, u8 *lvl_arr)
 {
 	static bool precomputed;
 
@@ -1484,22 +1483,22 @@ static struct dmi_system_id clevo_xsm_dmi_table[] = {
 		.callback = clevo_xsm_dmi_matched,
 		.driver_data = &kb_full_color_with_extra_ops,
 	},
-  {
+		{
 		.ident = "Clevo N870HP6",
 		.matches = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "N85_87HP6"),
 		},
 		.callback = clevo_xsm_dmi_matched,
 		.driver_data = &kb_full_color_ops,
-  },
+		},
 	{
-    .ident = "Clevo P65_67HSHP",
-    .matches = {
-	DMI_MATCH(DMI_PRODUCT_NAME, "P65_67HSHP"),
-    },
-    .callback = clevo_xsm_dmi_matched,
-    .driver_data = &kb_full_color_ops,
-  },
+				.ident = "Clevo P65_67HSHP",
+				.matches = {
+		DMI_MATCH(DMI_PRODUCT_NAME, "P65_67HSHP"),
+			},
+		.callback = clevo_xsm_dmi_matched,
+		.driver_data = &kb_full_color_ops,
+	},
 	/* Ones that don't follow the 'standard' product names above */
 	{
 		.ident = "Clevo P7xxDM(-G)",
@@ -1543,13 +1542,13 @@ static struct dmi_system_id clevo_xsm_dmi_table[] = {
 		.driver_data = &kb_full_color_ops,
 	},
 	{
-	.ident = "Clevo P7xxDM3(-G)",
-	.matches = {
-	    DMI_MATCH(DMI_PRODUCT_NAME, "P7xxDM3(-G)"),
+		.ident = "Clevo P7xxDM3(-G)",
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_NAME, "P7xxDM3(-G)"),
+		},
+		.callback = clevo_xsm_dmi_matched,
+		.driver_data = &kb_full_color_ops,
 	},
-	.callback = clevo_xsm_dmi_matched,
-	.driver_data = &kb_full_color_ops,
-    },
 	{
 		/* terminating NULL entry */
 	},
