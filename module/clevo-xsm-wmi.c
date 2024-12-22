@@ -34,6 +34,7 @@
 #include <linux/kthread.h>
 #include <linux/leds.h>
 #include <linux/module.h>
+#include <linux/wmi.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/rfkill.h>
@@ -906,19 +907,18 @@ static struct kb_backlight_ops kb_8_color_ops = {
 	.init           = kb_8_color__init,
 };
 
-
-static void clevo_xsm_wmi_notify(u32 value, void *context)
+static void clevo_xsm_wmi_notify(struct wmi_device *wdev, union acpi_object *dummy)
 {
 	static unsigned int report_cnt;
-
 	u32 event;
+	int status;
 
-	if (value != 0xD0) {
-		CLEVO_XSM_INFO("Unexpected WMI event (%0#6x)\n", value);
-		return;
+	status = clevo_xsm_wmi_evaluate_wmbb_method(GET_EVENT, 0, &event);
+	if (!status) {
+			CLEVO_XSM_ERROR("clevo_xsm_wmi_evaluate_wmbb_method failed\n");
+			return;
 	}
-
-	clevo_xsm_wmi_evaluate_wmbb_method(GET_EVENT, 0, &event);
+	CLEVO_XSM_DEBUG("clevo_xsm_wmi_notify()\n");
 
 	switch (event) {
 	case 0xF4:
