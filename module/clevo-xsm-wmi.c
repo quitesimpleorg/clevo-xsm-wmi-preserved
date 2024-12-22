@@ -194,9 +194,6 @@ module_param_named(poll_freq, param_poll_freq, poll_freq, 0400);
 MODULE_PARM_DESC(poll_freq, "Set polling frequency");
 
 
-struct platform_device *clevo_xsm_platform_device;
-
-
 /* LED sub-driver */
 
 static bool param_led_invert;
@@ -254,7 +251,7 @@ static struct led_classdev airplane_led = {
 	.max_brightness = 1,
 };
 
-static int __init clevo_xsm_led_init(void)
+static int clevo_xsm_led_init(struct device *dev)
 {
 	int err;
 
@@ -264,7 +261,7 @@ static int __init clevo_xsm_led_init(void)
 
 	INIT_WORK(&led_work.work, airplane_led_update);
 
-	err = led_classdev_register(&clevo_xsm_platform_device->dev,
+	err = led_classdev_register(dev,
 		&airplane_led);
 	if (unlikely(err))
 		goto err_destroy_workqueue;
@@ -278,7 +275,7 @@ err_destroy_workqueue:
 	return err;
 }
 
-static void __exit clevo_xsm_led_exit(void)
+static void clevo_xsm_led_exit(void)
 {
 	if (!IS_ERR_OR_NULL(airplane_led.dev))
 		led_classdev_unregister(&airplane_led);
@@ -372,7 +369,7 @@ static void clevo_xsm_input_close(struct input_dev *dev)
 	clevo_xsm_input_polling_task = NULL;
 }
 
-static int __init clevo_xsm_input_init(void)
+static int clevo_xsm_input_init(struct device *dev)
 {
 	int err;
 	u8 byte;
@@ -386,7 +383,7 @@ static int __init clevo_xsm_input_init(void)
 	clevo_xsm_input_device->name = "Clevo Airplane-Mode Hotkey";
 	clevo_xsm_input_device->phys = CLEVO_XSM_DRIVER_NAME "/input0";
 	clevo_xsm_input_device->id.bustype = BUS_HOST;
-	clevo_xsm_input_device->dev.parent = &clevo_xsm_platform_device->dev;
+	clevo_xsm_input_device->dev.parent = dev;
 
 	clevo_xsm_input_device->open  = clevo_xsm_input_open;
 	clevo_xsm_input_device->close = clevo_xsm_input_close;
@@ -967,50 +964,6 @@ static void clevo_xsm_wmi_notify(struct wmi_device *wdev, union acpi_object *dum
 	}
 }
 
-static int clevo_xsm_wmi_probe(struct platform_device *dev)
-{
-	int status;
-
-	status = wmi_install_notify_handler(CLEVO_EVENT_GUID,
-		clevo_xsm_wmi_notify, NULL);
-	if (unlikely(ACPI_FAILURE(status))) {
-		CLEVO_XSM_ERROR("Could not register WMI notify handler (%0#6x)\n",
-			status);
-		return -EIO;
-	}
-
-	clevo_xsm_wmi_evaluate_wmbb_method(GET_AP, 0, NULL);
-
-	if (kb_backlight.ops)
-		kb_backlight.ops->init();
-
-	return 0;
-}
-
-static void clevo_xsm_wmi_remove(struct platform_device *dev)
-{
-	wmi_remove_notify_handler(CLEVO_EVENT_GUID);
-}
-
-static int clevo_xsm_wmi_resume(struct platform_device *dev)
-{
-	clevo_xsm_wmi_evaluate_wmbb_method(GET_AP, 0, NULL);
-
-	if (kb_backlight.ops && kb_backlight.state == KB_STATE_ON)
-		kb_backlight.ops->set_mode(kb_backlight.mode);
-
-	return 0;
-}
-
-static struct platform_driver clevo_xsm_platform_driver = {
-	.remove = clevo_xsm_wmi_remove,
-	.resume = clevo_xsm_wmi_resume,
-	.driver = {
-		.name  = CLEVO_XSM_DRIVER_NAME,
-		.owner = THIS_MODULE,
-	},
-};
-
 
 /* RFKILL sub-driver */
 
@@ -1033,7 +986,7 @@ static const struct rfkill_ops clevo_xsm_wwan_rfkill_ops = {
 	.set_block = clevo_xsm_wwan_rfkill_set_block,
 };
 
-static int __init clevo_xsm_rfkill_init(void)
+static int clevo_xsm_rfkill_init(struct device *dev)
 {
 	int err;
 	u32 unblocked = 0;
@@ -1043,8 +996,7 @@ static int __init clevo_xsm_rfkill_init(void)
 
 	clevo_xsm_wmi_evaluate_wmbb_method(TALK_BIOS_3G, 1, NULL);
 
-	clevo_xsm_wwan_rfkill_device = rfkill_alloc("clevo_xsm-wwan",
-		&clevo_xsm_platform_device->dev,
+	clevo_xsm_wwan_rfkill_device = rfkill_alloc("clevo_xsm-wwan", dev,
 		RFKILL_TYPE_WWAN,
 		&clevo_xsm_wwan_rfkill_ops, NULL);
 	if (unlikely(!clevo_xsm_wwan_rfkill_device))
@@ -1363,7 +1315,7 @@ clevo_hwmon_fini(struct device *dev)
 
 /* dmi & init & exit */
 
-static int __init clevo_xsm_dmi_matched(const struct dmi_system_id *id)
+static int clevo_xsm_dmi_matched(const struct dmi_system_id *id)
 {
 	CLEVO_XSM_INFO("Model %s found\n", id->ident);
 	kb_backlight.ops = id->driver_data;
@@ -1371,7 +1323,7 @@ static int __init clevo_xsm_dmi_matched(const struct dmi_system_id *id)
 	return 1;
 }
 
-static struct dmi_system_id clevo_xsm_dmi_table[] __initdata = {
+static struct dmi_system_id clevo_xsm_dmi_table[] = {
 	{
 		.ident = "Clevo P870DM",
 		.matches = {
@@ -1605,7 +1557,40 @@ static struct dmi_system_id clevo_xsm_dmi_table[] __initdata = {
 
 MODULE_DEVICE_TABLE(dmi, clevo_xsm_dmi_table);
 
-static int __init clevo_xsm_init(void)
+
+
+/* HACK: maybe there is a better way but we need this stuff in /sys/devices/platform */
+static int clevo_xsm_platform_driver_probe(struct platform_device *dev)
+{
+	if (device_create_file(&dev->dev,
+		&dev_attr_kb_brightness) != 0)
+		CLEVO_XSM_ERROR("Sysfs attribute creation failed for brightness\n");
+
+	if (device_create_file(&dev->dev,
+		&dev_attr_kb_state) != 0)
+		CLEVO_XSM_ERROR("Sysfs attribute creation failed for state\n");
+
+	if (device_create_file(&dev->dev,
+		&dev_attr_kb_mode) != 0)
+		CLEVO_XSM_ERROR("Sysfs attribute creation failed for mode\n");
+
+	if (device_create_file(&dev->dev,
+		&dev_attr_kb_color) != 0)
+		CLEVO_XSM_ERROR("Sysfs attribute creation failed for color\n");
+
+	return 0;
+}
+
+static struct platform_driver clevo_xsm_platform_driver = {
+	.driver = {
+		.name  = CLEVO_XSM_DRIVER_NAME,
+		.owner = THIS_MODULE,
+	},
+};
+
+
+
+static int clevo_xsm_init(struct device *dev)
 {
 	int err;
 
@@ -1619,6 +1604,69 @@ static int __init clevo_xsm_init(void)
 
 	dmi_check_system(clevo_xsm_dmi_table);
 
+	if (kb_backlight.ops)
+		kb_backlight.ops->init();
+
+	struct platform_device *clevo_xsm_platform_device =
+		platform_create_bundle(&clevo_xsm_platform_driver,
+			clevo_xsm_platform_driver_probe, NULL, 0, NULL, 0);
+
+
+	if (IS_ERR(clevo_xsm_platform_device))
+		return PTR_ERR(clevo_xsm_platform_device);
+
+	dev_set_drvdata(dev, clevo_xsm_platform_device);
+
+	err = clevo_xsm_rfkill_init(&clevo_xsm_platform_device->dev);
+	if (unlikely(err))
+		CLEVO_XSM_ERROR("Could not register rfkill device\n");
+
+	err = clevo_xsm_input_init(&clevo_xsm_platform_device->dev);
+	if (unlikely(err))
+		CLEVO_XSM_ERROR("Could not register input device\n");
+
+	err = clevo_xsm_led_init(&clevo_xsm_platform_device->dev);
+	if (unlikely(err))
+		CLEVO_XSM_ERROR("Could not register LED device\n");
+
+#ifdef CLEVO_HAS_HWMON
+	clevo_hwmon_init(&clevo_xsm_platform_device->dev);
+#endif
+
+	return 0;
+}
+
+static void clevo_xsm_exit(struct device *dev)
+{
+	clevo_xsm_led_exit();
+	clevo_xsm_input_exit();
+	clevo_xsm_rfkill_exit();
+
+#ifdef CLEVO_HAS_HWMON
+	clevo_hwmon_fini(dev);
+#endif
+	device_remove_file(dev,
+		&dev_attr_kb_brightness);
+	device_remove_file(dev, &dev_attr_kb_state);
+	device_remove_file(dev, &dev_attr_kb_mode);
+	device_remove_file(dev, &dev_attr_kb_color);
+
+
+}
+
+static void clevo_xsm_wmi_remove(struct wmi_device *dev)
+{
+	struct platform_device *platform_device = dev_get_drvdata(&dev->dev);
+
+	clevo_xsm_exit(&platform_device->dev);
+	platform_device_unregister(platform_device);
+	platform_driver_unregister(&clevo_xsm_platform_driver);
+}
+
+static int clevo_xsm_wmi_probe(struct wmi_device *wdev, const void *dummy_context)
+{
+	CLEVO_XSM_DEBUG("clevo_xsm_wmi_probe driver probe\n");
+
 	if (!wmi_has_guid(CLEVO_EVENT_GUID)) {
 		CLEVO_XSM_INFO("No known WMI event notification GUID found\n");
 		return -ENODEV;
@@ -1629,69 +1677,41 @@ static int __init clevo_xsm_init(void)
 		return -ENODEV;
 	}
 
-	clevo_xsm_platform_device =
-		platform_create_bundle(&clevo_xsm_platform_driver,
-			clevo_xsm_wmi_probe, NULL, 0, NULL, 0);
+	clevo_xsm_wmi_evaluate_wmbb_method(GET_AP, 0, NULL);
 
-	if (unlikely(IS_ERR(clevo_xsm_platform_device)))
-		return PTR_ERR(clevo_xsm_platform_device);
 
-	err = clevo_xsm_rfkill_init();
-	if (unlikely(err))
-		CLEVO_XSM_ERROR("Could not register rfkill device\n");
+	int ret = clevo_xsm_init(&wdev->dev);
 
-	err = clevo_xsm_input_init();
-	if (unlikely(err))
-		CLEVO_XSM_ERROR("Could not register input device\n");
-
-	err = clevo_xsm_led_init();
-	if (unlikely(err))
-		CLEVO_XSM_ERROR("Could not register LED device\n");
-
-	if (device_create_file(&clevo_xsm_platform_device->dev,
-		&dev_attr_kb_brightness) != 0)
-		CLEVO_XSM_ERROR("Sysfs attribute creation failed for brightness\n");
-
-	if (device_create_file(&clevo_xsm_platform_device->dev,
-		&dev_attr_kb_state) != 0)
-		CLEVO_XSM_ERROR("Sysfs attribute creation failed for state\n");
-
-	if (device_create_file(&clevo_xsm_platform_device->dev,
-		&dev_attr_kb_mode) != 0)
-		CLEVO_XSM_ERROR("Sysfs attribute creation failed for mode\n");
-
-	if (device_create_file(&clevo_xsm_platform_device->dev,
-		&dev_attr_kb_color) != 0)
-		CLEVO_XSM_ERROR("Sysfs attribute creation failed for color\n");
-
-#ifdef CLEVO_HAS_HWMON
-	clevo_hwmon_init(&clevo_xsm_platform_device->dev);
-#endif
-
-	return 0;
+	if (ret != 0) {
+		return ret;
+	}
+	CLEVO_XSM_DEBUG("clevo_xsm_wmi_probe driver probe finished\n");
+	return ret;
 }
 
-static void __exit clevo_xsm_exit(void)
-{
-	clevo_xsm_led_exit();
-	clevo_xsm_input_exit();
-	clevo_xsm_rfkill_exit();
 
-#ifdef CLEVO_HAS_HWMON
-	clevo_hwmon_fini(&clevo_xsm_platform_device->dev);
-#endif
-	device_remove_file(&clevo_xsm_platform_device->dev,
-		&dev_attr_kb_brightness);
-	device_remove_file(&clevo_xsm_platform_device->dev, &dev_attr_kb_state);
-	device_remove_file(&clevo_xsm_platform_device->dev, &dev_attr_kb_mode);
-	device_remove_file(&clevo_xsm_platform_device->dev, &dev_attr_kb_color);
+static const struct wmi_device_id clevo_wmi_device_ids[] = {
+	// Listing one should be enough, for a driver that "takes care of all anyways"
+	// also prevents probe (and handling) per "device"
+	{ .guid_string = CLEVO_EVENT_GUID },
+	{ }
+};
 
-	platform_device_unregister(clevo_xsm_platform_device);
-	platform_driver_unregister(&clevo_xsm_platform_driver);
-}
+static struct wmi_driver clevo_xsm_wmi_driver = {
+	.driver = {
+		.name = "clevo_xsm_wmi",
+		.owner = THIS_MODULE
+	},
+	.id_table = clevo_wmi_device_ids,
+	.probe = clevo_xsm_wmi_probe,
+	.remove = clevo_xsm_wmi_remove,
+	.notify = clevo_xsm_wmi_notify,
+};
 
-module_init(clevo_xsm_init);
-module_exit(clevo_xsm_exit);
+module_wmi_driver(clevo_xsm_wmi_driver);
+
+//module_init(clevo_xsm_init);
+//module_exit(clevo_xsm_exit);
 
 MODULE_AUTHOR("TUXEDO Computer GmbH <tux@tuxedocomputers.com>");
 MODULE_DESCRIPTION("Clevo SM series laptop driver.");
