@@ -163,6 +163,13 @@ static bool param_kb_cycle_colors = true;
 module_param_named(kb_cycle_colors, param_kb_cycle_colors, bool, 0400);
 MODULE_PARM_DESC(kb_cycle_colors, "Cycle colors rather than modes");
 
+static bool param_disable_airplane_hotkey = false;
+module_param_named(disable_airplane_hotkey, param_disable_airplane_hotkey, bool, 0400);
+MODULE_PARM_DESC(disable_airplane_hotkey, "Disable \"airplane mode\" hotkey and corresponding airplane mode hotkey");
+
+static bool param_disable_airplane_led = false;
+module_param_named(disable_airplane_led, param_disable_airplane_led, bool, 0400);
+MODULE_PARM_DESC(disable_airplane_led, "Disable \"airplane mode\" LED");
 
 #define POLL_FREQ_MIN     1
 #define POLL_FREQ_MAX     20
@@ -254,6 +261,9 @@ static struct led_classdev airplane_led = {
 static int clevo_xsm_led_init(struct device *dev)
 {
 	int err;
+
+	if (param_disable_airplane_led)
+		return 0;
 
 	led_workqueue = create_singlethread_workqueue("led_workqueue");
 	if (unlikely(!led_workqueue))
@@ -373,6 +383,9 @@ static int clevo_xsm_input_init(struct device *dev)
 {
 	int err;
 	u8 byte;
+
+	if (param_disable_airplane_hotkey)
+		return 0;
 
 	clevo_xsm_input_device = input_allocate_device();
 	if (unlikely(!clevo_xsm_input_device)) {
