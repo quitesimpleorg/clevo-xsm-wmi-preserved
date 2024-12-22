@@ -1,3 +1,23 @@
+# Purpose of this fork
+This fork tries to keep clevo-wmi-xmi afloat by making it compile and work on current kernels.
+See also [this blog post](https://quitesimple.org/page/fork-clevo-xsm-wmi-driver) for context.
+    
+Changes:
+- 6.12 compatibility.
+- Convert hwmon code (fan / temp info) to use hwmon_device_register_with_info(). This gets rid of the dmesg deprecation warning and simplifies the code.
+- Convert code to use module_wmi_driver().
+- Params to disable airplane-mode related code. 
+    
+TODO:  
+- Investigate GPU fan code marked as experimental that was previously there and potentially enable it. 
+- Avoid using deprecated WMI functions (when things start to break again :-)). 
+- Convert to use the kernels "LED" subsystem? 
+    
+The driver uses a polling kthread to watch for the airplane mode hotkey. I hence added two new params to disable airplane mode,
+for those who don't need it. Pass `disable_airplane_led=1 disable_airplane_hotkey=1` in insmod/modprobe. Eventually, this might be put into conditional compile flags.
+
+Original README:
+
 # The status and the future of TUXEDO / Clevo WMI
 Read this:
 https://bitbucket.org/tuxedocomputers/clevo-xsm-wmi/issues/44/the-status-and-the-future-of-tuxedo-clevo
